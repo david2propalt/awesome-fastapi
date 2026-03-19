@@ -3,7 +3,15 @@ name: CI
 on: [push]
 
 jobs:
+  approval:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Approved
+        run: echo "Approved"
+
   test:
+    needs: approval
     runs-on: ubuntu-latest
 
     services:
