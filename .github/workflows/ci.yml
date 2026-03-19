@@ -5,7 +5,7 @@ on: [push]
 jobs:
   approval:
     runs-on: ubuntu-latest
-    environment: production
+    environment: manual-approval
     steps:
       - name: Approved
         run: echo "Approved"
