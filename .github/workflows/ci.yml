@@ -1,0 +1,50 @@
+name: CI
+
+on: [push]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      MYSQL_ROOT_URL: mysql+pymysql://root:root@127.0.0.1:3306/mysql
+      DATABASE_URL: mysql+pymysql://app:app@127.0.0.1:3306/awesome_fastapi
+      TEST_DATABASE_URL: mysql+pymysql://app_test:app_test@127.0.0.1:3306/awesome_fastapi_test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Bootstrap MySQL users and databases
+        run: |
+          uv run python -c "import os,pymysql; conn=pymysql.connect(host='127.0.0.1',user='root',password='root',database='mysql'); c=conn.cursor(); c.execute(\"CREATE DATABASE IF NOT EXISTS awesome_fastapi\"); c.execute(\"CREATE DATABASE IF NOT EXISTS awesome_fastapi_test\"); c.execute(\"CREATE USER IF NOT EXISTS 'app'@'%' IDENTIFIED BY 'app'\"); c.execute(\"CREATE USER IF NOT EXISTS 'app_test'@'%' IDENTIFIED BY 'app_test'\"); c.execute(\"GRANT ALL PRIVILEGES ON awesome_fastapi.* TO 'app'@'%'\"); c.execute(\"GRANT ALL PRIVILEGES ON awesome_fastapi_test.* TO 'app_test'@'%'\"); c.execute(\"FLUSH PRIVILEGES\"); conn.commit(); conn.close()"
+
+      - name: Run ruff
+        run: uv run ruff check .
+
+      - name: Run pytest
+        run: uv run pytest
