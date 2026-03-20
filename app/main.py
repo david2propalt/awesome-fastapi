@@ -7,10 +7,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api.items import router as items_router
+from app.api.auth import router as auth_router
+from app.api.orders import router as orders_router
+from app.api.products import router as products_router
+from app.api.users import router as users_router
 from app.db.session import Base, engine
 from app.dependencies.common import AppConfig, get_config
-from app.models import Item  # noqa: F401
+from app.models import Order, Product, User  # noqa: F401
 
 
 @asynccontextmanager
@@ -31,9 +34,7 @@ app.add_middleware(
 
 
 @app.exception_handler(StarletteHTTPException)
-async def http_exception_handler(
-    request: Request, exc: StarletteHTTPException
-) -> JSONResponse:
+async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -75,4 +76,7 @@ def health_check(config: AppConfig = Depends(get_config)) -> dict:
     }
 
 
-app.include_router(items_router)
+app.include_router(auth_router)
+app.include_router(orders_router)
+app.include_router(products_router)
+app.include_router(users_router)

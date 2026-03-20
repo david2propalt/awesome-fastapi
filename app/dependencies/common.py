@@ -9,6 +9,9 @@ class AppConfig(BaseSettings):
     app_name: str = "Awesome FastAPI Demo"
     version: str = "1.0.0"
     database_url: str = "mysql+pymysql://app:app@127.0.0.1:3306/awesome_fastapi"
+    jwt_secret: str = "change-me-in-production-use-32bytes!"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 60
 
 
 @lru_cache
