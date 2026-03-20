@@ -12,7 +12,7 @@ from app.api.orders import router as orders_router
 from app.api.products import router as products_router
 from app.api.users import router as users_router
 from app.db.session import Base, engine
-from app.dependencies.common import AppConfig, get_config
+from app.dependencies.config import AppConfig, get_config
 from app.models import Order, Product, User  # noqa: F401
 
 

@@ -51,7 +51,7 @@ awesome-fastapi/
 │   │   └── session.py           # engine、SessionLocal、Base、get_db 依赖
 │   ├── dependencies/
 │   │   ├── auth.py              # get_current_user、create_access_token
-│   │   └── common.py            # AppConfig (pydantic-settings) + get_config()
+│   │   └── config.py            # AppConfig (pydantic-settings) + get_config()
 │   └── core/
 │       └── errors.py            # 自定义 HTTPException 子类
 ├── tests/
@@ -115,7 +115,7 @@ awesome-fastapi/
 - `engine` 创建时带 `pool_pre_ping=True`
 - 测试通过 `app.dependency_overrides[get_db] = override_get_db` 替换为测试数据库
 
-### 7. 配置 (`app/dependencies/common.py`)
+### 7. 配置 (`app/dependencies/config.py`)
 
 - `AppConfig` 继承 `BaseSettings`，自动读取 `.env` 文件
 - `get_config()` 用 `@lru_cache` 装饰，全局单例

@@ -31,7 +31,7 @@ awesome-fastapi/
 │   │   └── session.py          # SQLAlchemy engine/session/get_db
 │   ├── dependencies/
 │   │   ├── auth.py             # JWT auth dependency (get_current_user)
-│   │   └── common.py           # App-level dependency injection
+│   │   └── config.py           # AppConfig (pydantic-settings) + get_config()
 │   ├── models/
 │   │   ├── __init__.py         # Unified model exports
 │   │   ├── order.py            # Order ORM model

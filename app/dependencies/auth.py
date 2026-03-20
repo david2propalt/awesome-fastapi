@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import UnauthorizedError
 from app.db.session import get_db
-from app.dependencies.common import AppConfig, get_config
+from app.dependencies.config import AppConfig, get_config
 from app.models.user import User
 
 bearer_scheme = HTTPBearer(auto_error=False)

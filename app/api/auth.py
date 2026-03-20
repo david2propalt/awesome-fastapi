@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.errors import UnauthorizedError
 from app.db.session import get_db
 from app.dependencies.auth import create_access_token, hash_password
-from app.dependencies.common import AppConfig, get_config
+from app.dependencies.config import AppConfig, get_config
 from app.models.user import User
 from app.schemas.auth import LoginRequest, TokenResponse
 

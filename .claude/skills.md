@@ -14,7 +14,7 @@ Variables are marked as `{{variable_name}}`.
 
 ## gen-resource
 
-**用途**: 为全新资源一步生成模型、Schema、错误类、路由，并完成注册。
+**用途**: 为全新资源一步生成模型、Schema、错误类、路由和测试，并完成注册。
 
 **使用示例**: `请用 gen-resource 生成 {{resource}} 资源，字段为 {{fields}}`
 
@@ -29,141 +29,84 @@ Variables are marked as `{{variable_name}}`.
 - Resource         = {{Resource}}          （PascalCase，如 Order）
 - 字段列表          = {{fields}}            （格式：字段名:类型，如 title:str, price:float）
 
+---
+
 步骤 1 — app/models/{{resource}}.py
+
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column
+
 from app.db.session import Base
+
 
 class {{Resource}}(Base):
     __tablename__ = "{{resource_plural}}"
+
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    # str 字段：Mapped[str] = mapped_column(String(N), nullable=False)
-    # 可选字段：Mapped[str | None] = mapped_column(String(N), nullable=True)
-    # 数值字段：Mapped[float] = mapped_column(nullable=False)
+    {{field1}}: Mapped[str] = mapped_column(String({{max_length}}), nullable=False)
+    {{field2}}: Mapped[str | None] = mapped_column(String({{max_length}}), nullable=True)
+    {{field3}}: Mapped[float] = mapped_column(nullable=False)
+
+规范：
+- 必须继承 app.db.session.Base
+- 使用 Mapped[type] 注解 + mapped_column()（SQLAlchemy 2.0 风格，不用旧版 Column()）
+- nullable 字段类型写为 Mapped[str | None]
+- String 字段必须指定长度上限
+- __tablename__ 使用 snake_case 复数
+
+---
 
 步骤 2 — app/schemas/{{resource}}.py
+
 from pydantic import BaseModel, ConfigDict, Field
+
 
 class {{Resource}}Create(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    # 必填 str：Field(..., min_length=1, max_length=N)
-    # 可选 str：Field(default=None, max_length=N)
-    # 数值：Field(..., gt=0)
+
+    {{field1}}: str = Field(..., min_length=1, max_length={{max_length}})
+    {{field2}}: str | None = Field(default=None, max_length={{max_length}})
+    {{field3}}: float = Field(..., gt=0)
+
 
 class {{Resource}}Response(BaseModel):
     model_config = ConfigDict(extra="ignore", from_attributes=True)
+
     id: int
-    # 与模型字段一一对应
+    {{field1}}: str
+    {{field2}}: str | None = None
+    {{field3}}: float
+
+规范：
+- Create schema 使用 extra="forbid" 拒绝多余字段
+- Response schema 使用 extra="ignore" + from_attributes=True（支持 ORM 对象直接序列化）
+- 必填字段用 Field(...) 并加校验（min_length/gt 等）
+- 可选字段用 str | None，default=None
+
+---
 
 步骤 3 — app/core/errors.py 追加
+
 class {{Resource}}NotFoundError(HTTPException):
     def __init__(self, {{resource}}_id: int) -> None:
         super().__init__(status_code=404, detail=f"{{Resource}} {{{resource}}_id} not found")
 
-步骤 4 — app/api/{{resource_plural}}.py
-from fastapi import APIRouter, Depends, Response, status
-from sqlalchemy.orm import Session
-from app.core.errors import {{Resource}}NotFoundError
-from app.db.session import get_db
-# 若路由需要认证，取消下面两行注释：
-# from app.dependencies.auth import get_current_user
-# from app.models.user import User
-from app.models.{{resource}} import {{Resource}}
-from app.schemas.{{resource}} import {{Resource}}Create, {{Resource}}Response
-
-router = APIRouter(prefix="/{{resource_plural}}", tags=["{{resource_plural}}"])
-
-def to_{{resource}}_response({{resource}}: {{Resource}}) -> {{Resource}}Response:
-    return {{Resource}}Response(id={{resource}}.id, ...)
-
-@router.post("/", response_model={{Resource}}Response, status_code=201)
-def create_{{resource}}(
-    payload: {{Resource}}Create,
-    db: Session = Depends(get_db),
-    # _: User = Depends(get_current_user),  # 需要认证时取消注释
-) -> {{Resource}}Response:
-    {{resource}} = {{Resource}}(**payload.model_dump())
-    db.add({{resource}})
-    db.commit()
-    db.refresh({{resource}})
-    return to_{{resource}}_response({{resource}})
-
-@router.get("/{{{resource}}_id}", response_model={{Resource}}Response)
-def get_{{resource}}(
-    {{resource}}_id: int,
-    db: Session = Depends(get_db),
-    # _: User = Depends(get_current_user),  # 需要认证时取消注释
-) -> {{Resource}}Response:
-    {{resource}} = db.get({{Resource}}, {{resource}}_id)
-    if {{resource}} is None:
-        raise {{Resource}}NotFoundError({{resource}}_id)
-    return to_{{resource}}_response({{resource}})
-
-@router.put("/{{{resource}}_id}", response_model={{Resource}}Response)
-def update_{{resource}}(
-    {{resource}}_id: int,
-    payload: {{Resource}}Create,
-    db: Session = Depends(get_db),
-    # _: User = Depends(get_current_user),  # 需要认证时取消注释
-) -> {{Resource}}Response:
-    {{resource}} = db.get({{Resource}}, {{resource}}_id)
-    if {{resource}} is None:
-        raise {{Resource}}NotFoundError({{resource}}_id)
-    for key, value in payload.model_dump().items():
-        setattr({{resource}}, key, value)
-    db.commit()
-    db.refresh({{resource}})
-    return to_{{resource}}_response({{resource}})
-
-@router.delete("/{{{resource}}_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_{{resource}}(
-    {{resource}}_id: int,
-    db: Session = Depends(get_db),
-    # _: User = Depends(get_current_user),  # 需要认证时取消注释
-) -> Response:
-    {{resource}} = db.get({{Resource}}, {{resource}}_id)
-    if {{resource}} is None:
-        raise {{Resource}}NotFoundError({{resource}}_id)
-    db.delete({{resource}})
-    db.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-步骤 5 — app/models/__init__.py 追加
-from app.models.{{resource}} import {{Resource}}
-# 加入 __all__
-
-步骤 6 — app/main.py 追加
-from app.api.{{resource_plural}} import router as {{resource_plural}}_router
-from app.models import ..., {{Resource}}  # noqa: F401
-app.include_router({{resource_plural}}_router)
-```
-
 ---
 
-## gen-router
-
-**用途**: 为新资源生成完整的 CRUD API 路由文件。
-
-**使用示例**: `请用 gen-router 为 {{resource}} 资源生成路由`
-
-**模板**:
-
-```
-请在 app/api/{{resource_plural}}.py 创建以下内容，严格遵循项目风格：
+步骤 4 — app/api/{{resource_plural}}.py
 
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.errors import {{Resource}}NotFoundError
 from app.db.session import get_db
+# 若路由需要认证，取消下面两行注释：
+# from app.dependencies.auth import get_current_user
+# from app.models.user import User
 from app.models.{{resource}} import {{Resource}}
 from app.schemas.{{resource}} import {{Resource}}Create, {{Resource}}Response
 
 router = APIRouter(prefix="/{{resource_plural}}", tags=["{{resource_plural}}"])
-
-# 若路由需要认证，取消下面两行注释：
-# from app.dependencies.auth import get_current_user
-# from app.models.user import User
 
 
 def to_{{resource}}_response({{resource}}: {{Resource}}) -> {{Resource}}Response:
@@ -235,102 +178,26 @@ def delete_{{resource}}(
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-然后在 app/main.py 中 include 这个 router：
+---
+
+步骤 5 — app/models/__init__.py 追加
+
+from app.models.{{resource}} import {{Resource}}
+# 加入 __all__
+
+---
+
+步骤 6 — app/main.py 追加
+
 from app.api.{{resource_plural}} import router as {{resource_plural}}_router
+from app.models import ..., {{Resource}}  # noqa: F401
 app.include_router({{resource_plural}}_router)
 
-同时在 app/models/__init__.py 中导出该模型（避免 SQLAlchemy metadata 遗漏）。
-```
-
 ---
 
-## gen-model
+步骤 7 — tests/test_{{resource_plural}}.py
 
-**用途**: 生成 SQLAlchemy 2.0 风格的 ORM 模型。
-
-**使用示例**: `请用 gen-model 为 {{resource}} 生成模型，字段为 {{fields}}`
-
-**模板**:
-
-```
-请在 app/models/{{resource}}.py 创建以下 SQLAlchemy 2.0 模型：
-
-from sqlalchemy import String
-from sqlalchemy.orm import Mapped, mapped_column
-
-from app.db.session import Base
-
-
-class {{Resource}}(Base):
-    __tablename__ = "{{resource_plural}}"
-
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    {{field1}}: Mapped[str] = mapped_column(String({{max_length}}), nullable=False)
-    {{field2}}: Mapped[str | None] = mapped_column(String({{max_length}}), nullable=True)
-    {{field3}}: Mapped[float] = mapped_column(nullable=False)
-
-规范：
-- 必须继承 app.db.session.Base
-- 使用 Mapped[type] 注解 + mapped_column()（SQLAlchemy 2.0 风格）
-- nullable 字段类型写为 Mapped[str | None]
-- String 字段必须指定长度上限
-- __tablename__ 使用 snake_case 复数
-```
-
----
-
-## gen-schema
-
-**用途**: 生成 Pydantic v2 的 Create / Response schema 对。
-
-**使用示例**: `请用 gen-schema 为 {{resource}} 生成 schema`
-
-**模板**:
-
-```
-请在 app/schemas/{{resource}}.py 创建以下 Pydantic v2 schema：
-
-from pydantic import BaseModel, ConfigDict, Field
-
-
-class {{Resource}}Create(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    {{field1}}: str = Field(..., min_length=1, max_length={{max_length}})
-    {{field2}}: str | None = Field(default=None, max_length={{max_length}})
-    {{field3}}: float = Field(..., gt=0)
-
-
-class {{Resource}}Response(BaseModel):
-    model_config = ConfigDict(extra="ignore", from_attributes=True)
-
-    id: int
-    {{field1}}: str
-    {{field2}}: str | None = None
-    {{field3}}: float
-
-规范：
-- Create schema 使用 extra="forbid" 拒绝多余字段
-- Response schema 使用 extra="ignore" + from_attributes=True（支持 ORM 对象）
-- 必填字段用 Field(...) 并加校验（min_length/gt 等）
-- 可选字段用 str | None，default=None
-```
-
----
-
-## gen-test
-
-**用途**: 为新资源的 CRUD 路由生成完整测试文件。
-
-**使用示例**: `请用 gen-test 为 {{resource}} 路由生成测试`
-
-**模板**:
-
-```
-请在 tests/test_{{resource_plural}}.py 创建以下测试，遵循项目测试风格。
-DB 引擎、client fixture、reset_db autouse fixture 均已在 tests/conftest.py 中定义，无需在此文件重复。
-
-# 若路由需要认证，setup 中额外获取 auth_headers（参考 test_orders.py）
+DB 引擎、client fixture、reset_db autouse fixture 均已在 tests/conftest.py 中定义，无需重复。
 
 import pytest
 from fastapi.testclient import TestClient
@@ -548,39 +415,78 @@ class Test{{Resource}}s:
 输出：根因分析 + 修复代码 + 验证方法。
 ```
 
-## update-skills
+## sync-docs
+
+**用途**: 项目发生结构性变更后，同步更新所有文档和配置模板，保持 README、CLAUDE.md、.env.example、skills.md 与实际代码一致。
+
+**使用示例**: `请用 sync-docs 同步项目文档，变更原因：{{reason}}`
+
+**模板**:
+
 ```
-触发时机：{{trigger}}
-# 可选：
-# - 引入了新依赖
-# - 修改了统一错误处理
-# - 升级了框架版本
-# - 调整了代码规范
-# - 项目结构发生变化
+项目发生了以下变更：{{reason}}
 
-请执行以下步骤：
-1. 读取当前项目的关键文件：
-   - pyproject.toml（依赖变更）
-   - app/main.py（中间件/配置变更）
-   - app/models/（模型风格变更）
-   - app/schemas/（Schema 风格变更）
-   - app/api/（路由风格变更）
-   - app/core/errors.py（错误处理变更）
-   - tests/（测试风格变更）
+请按顺序执行以下检查和更新：
 
-2. 与 .claude/skills.md 现有模板对比，检查：
-   - 依赖库名称/版本是否需要更新
-   - 代码风格示例是否仍然一致
-   - 错误处理方式是否有变化
-   - 命名规范是否有调整
-   - 是否有新增的通用模式需要沉淀为 SKILL
+---
 
-3. 更新 .claude/skills.md 中不一致的部分
+### 1. 读取关键源文件（先理解现状）
 
-4. 同步更新 .claude/project.md 的技术栈和结构说明
+- pyproject.toml — 依赖和 Python 版本
+- app/main.py — 中间件、路由注册、异常处理
+- app/dependencies/config.py — 所有配置字段（AppConfig）
+- app/models/__init__.py — 所有已注册模型
+- app/core/errors.py — 自定义异常
+- app/api/ 目录 — 路由结构
+- tests/ 目录 — 测试风格
 
-5. 输出变更摘要：
-   - 修改了哪些 SKILL
-   - 原因是什么
-   - 是否有建议新增的 SKILL
+---
+
+### 2. 同步 .env.example
+
+对比 app/dependencies/config.py 中 AppConfig 的字段：
+- 有新增字段 → 追加对应环境变量（带注释说明用途）
+- 有删除字段 → 移除对应行
+- 有默认值变更 → 更新示例值
+- 保持现有注释分组风格
+
+---
+
+### 3. 同步 CLAUDE.md
+
+重点检查以下章节：
+- **项目结构** — 是否有新增/移除的目录或文件
+- **技术栈表格** — 库名称/版本是否有变化
+- **核心架构约定** — 导入路径、命名规范是否仍然准确
+- **常见陷阱** — 是否有新的注意事项需要补充
+- **添加新资源的完整步骤** — 步骤顺序是否仍然正确
+
+---
+
+### 4. 同步 .claude/skills.md
+
+对比各 skill 模板中的代码示例与实际代码：
+- 导入路径是否正确（如 app.dependencies.config 等）
+- 代码风格示例是否仍与项目一致
+- 是否有新的通用模式值得沉淀为新 skill
+- 删除已不适用的模板内容
+
+---
+
+### 5. 同步 README.md
+
+检查以下内容：
+- 项目描述是否准确
+- 安装/启动步骤是否仍然有效（依赖、环境变量）
+- API 端点列表是否完整（新增/删除的路由）
+- 环境变量说明是否与 .env.example 一致
+
+---
+
+### 6. 输出变更摘要
+
+按文件分组，列出：
+- 修改了哪些内容
+- 修改原因
+- 是否发现文档与代码存在其他不一致（附建议）
 ```
