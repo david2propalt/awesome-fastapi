@@ -8,12 +8,13 @@ A minimal production-style FastAPI demo with:
 - CORS middleware
 - dependency injection example
 - unified JSON error responses
-- MySQL persistence with SQLAlchemy
+- PostgreSQL persistence with SQLAlchemy
 - environment-based configuration via pydantic-settings
 
 ## Runtime Requirement
 
 - Python 3.12+
+- Docker (for PostgreSQL)
 
 ## Project Structure
 
@@ -44,6 +45,7 @@ awesome-fastapi/
 │   │   └── user.py             # User request/response schemas
 │   └── main.py                 # FastAPI app entrypoint
 ├── tests/
+│   ├── conftest.py             # pytest fixtures, test DB setup
 │   ├── test_auth.py            # Auth integration tests
 │   ├── test_orders.py          # Order API integration tests
 │   ├── test_products.py        # Product API integration tests
@@ -56,17 +58,29 @@ awesome-fastapi/
 └── README.md
 ```
 
-## Local MySQL Bootstrap (recommended)
+## Start PostgreSQL
 
-```sql
-CREATE DATABASE IF NOT EXISTS awesome_fastapi;
-CREATE DATABASE IF NOT EXISTS awesome_fastapi_test;
-CREATE USER IF NOT EXISTS 'app'@'%' IDENTIFIED BY 'app';
-CREATE USER IF NOT EXISTS 'app_test'@'%' IDENTIFIED BY 'app_test';
-GRANT ALL PRIVILEGES ON awesome_fastapi.* TO 'app'@'%';
-GRANT ALL PRIVILEGES ON awesome_fastapi_test.* TO 'app_test'@'%';
-FLUSH PRIVILEGES;
+Run a shared PostgreSQL container (one-time setup, survives reboots):
+
+```bash
+docker run -d \
+  --name postgres \
+  --restart unless-stopped \
+  -e POSTGRES_USER=app \
+  -e POSTGRES_PASSWORD=app \
+  -e POSTGRES_DB=awesome_fastapi \
+  -p 5432:5432 \
+  -v postgres_data:/var/lib/postgresql \
+  postgres:18
 ```
+
+Then create the test database:
+
+```bash
+docker exec postgres psql -U app -d postgres -c "CREATE DATABASE awesome_fastapi_test;"
+```
+
+The container is not tied to this project — it can be shared across multiple services on the same machine.
 
 ## Configuration
 
@@ -80,7 +94,7 @@ cp .env.example .env
 |---|---|---|
 | `APP_NAME` | `Awesome FastAPI Demo` | Application name |
 | `VERSION` | `1.0.0` | Application version |
-| `DATABASE_URL` | `mysql+pymysql://app:app@127.0.0.1:3306/awesome_fastapi` | SQLAlchemy database URL |
+| `DATABASE_URL` | `postgresql+psycopg2://app:app@127.0.0.1:5432/awesome_fastapi` | SQLAlchemy database URL |
 | `JWT_SECRET` | `change-me-in-production` | Secret key for signing JWT tokens — **change in production** |
 | `JWT_ALGORITHM` | `HS256` | JWT signing algorithm |
 | `JWT_EXPIRE_MINUTES` | `60` | Token expiry in minutes |
@@ -96,7 +110,7 @@ uv run uvicorn app.main:app --reload
 
 ```bash
 uv run ruff check .
-TEST_DATABASE_URL='mysql+pymysql://app_test:app_test@127.0.0.1:3306/awesome_fastapi_test' uv run pytest
+uv run pytest
 ```
 
 ## Endpoints
